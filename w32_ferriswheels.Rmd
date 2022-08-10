@@ -1,0 +1,96 @@
+---
+title: "ferrishweels"
+author: "Anna Makova"
+date: "2022-08-09"
+output: html_document
+---
+
+# Ferris Wheels - Week 32
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# necessary packages for this script
+library(tidyverse)
+library(ggplot2)
+library(ggrepel)
+library(RColorBrewer)
+```
+## Data
+```{r}
+#read in data
+tuesdata <- tidytuesdayR::tt_load('2022-08-09')
+tuesdata <- tidytuesdayR::tt_load(2022, week = 32)
+
+wheels <- tuesdata$wheels
+```
+
+## Data Wrangling 
+```{r}
+#replacing missing information about diameter with the overall diameter group mean 
+wheels$diameter <- replace_na(wheels$diameter, mean(wheels$diameter, na.rm = TRUE))
+```
+
+```{r}
+#keeping specific country information only if there are located 3 or more ferris wheels  
+countries <- wheels %>%
+  group_by(country) %>%
+  summarise(n = n()) %>%
+  filter(n > 2) %>%
+  select(-n) %>%
+  deframe()
+
+wheels <- wheels %>%
+  mutate(wheel_kings = if_else(wheels$country %in% countries, wheels$country, "Other")) %>%
+  filter(!is.na(opened) & !is.na(height))
+```
+
+## Plotting 
+```{r}
+wheels_plot <- ggplot(wheels, aes(x = opened, y = height)) +
+  #adding our wheels according to opening date and height
+  geom_point(aes(size = diameter, color = wheel_kings), alpha = 0.8) +
+  scale_size(range = c(2,10)) +
+  scale_color_manual(values = brewer.pal(name = "Set3", n = 7)) +
+  
+  #axes tuning
+  scale_y_continuous(breaks = c(200, 300, 400, 500, 600, 700)) +
+  scale_x_date(date_breaks = "20 years", date_labels = "%Y", limits = c(as.Date("1892-01-01"), NA)) + 
+  
+  #annotating the oldest, highest, and widest wheels 
+  geom_text_repel(data = subset(wheels, height == max(wheels$height)), color = "white", family = "mono", point.padding = 1.5, arrow = arrow(length = unit(0.01, "npc")), 
+                  aes(label = paste0(name, " (", height, " ft)")), hjust = 1.2, vjust = 0.3, size = 3) +
+  annotate("text", label = "Highest:", color = "white", family = "mono", size = 3.5, fontface = 2, x = as.Date("1964-03-01"), y = 725)+
+  geom_text_repel(data = subset(wheels, diameter == max(wheels$diameter)), color = "white", family = "mono", point.padding = 1.75, arrow = arrow(length = unit(0.01, "npc")), 
+                  aes(label = paste0(name, " (", diameter, " ft)")), nudge_y = 60, hjust = 1.35, size = 3) +
+  annotate("text", label = "Widest:", color = "white", family = "mono", size = 3.5, fontface = 2, x = as.Date("1969-01-01"), y = 635)+
+  geom_text_repel(data = subset(wheels, opened == min(wheels$opened)), color = "white", family = "mono", point.padding = 1, arrow = arrow(length = unit(0.01, "npc")), 
+                  aes(label = paste0(name, " (", format(opened, "%b %d, %Y"), ")")), hjust = -0.2, vjust = 0.55, size = 3) +
+  annotate("text", label = "Oldest:", color = "white", family = "mono", size = 3.5, fontface = 2, x = as.Date("1910-06-01"), y = 290) +
+  
+  #labels 
+  labs(x="Date of opening", y= "Height (feet)", title="A Brief History of Ferris Wheels", subtitle = "Visualisation: @Anna_Mak_ | Source: {ferriswheels} by @Emil_Hvitfeldt") +
+  
+  #plot aesthetics
+  theme_classic() + 
+  guides(color = guide_legend("Countries \n(with >2 wheels)", override.aes = list(size = 5)), size = guide_legend("Diameter (feet)", override.aes = list(color = "white", alpha = 0.5))) +
+  theme(text = element_text(color = "white", family = "mono"),
+        plot.background = element_rect(fill = "black"),
+        plot.margin = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+        plot.title = element_text(face = "bold", size = 18, margin = margin(0,0,1,0,"cm")),
+        plot.subtitle = element_text(size = 8, vjust = 15),       
+        axis.line = element_line(color = "white"),
+        axis.ticks = element_line(colour = "white"),
+        axis.text = element_text(color = "white", family = "mono"),
+        panel.background = element_rect(fill = "black"),
+        legend.background = element_rect(fill = "black"),
+        legend.title = element_text(face = "bold", size = 10))
+
+wheels_plot 
+
+ggsave("w32_ferriswheels_makova.png", plot = wheels_plot, units = "cm",  width = 20, height = 15, dpi = "retina", device = "png")
+```
+
+
