@@ -1,0 +1,122 @@
+---
+title: "w33_feminists_badass"
+author: "Anna Makova"
+date: "2022-08-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(ggimage)
+library(cowplot)
+library(gghalves)
+library(scico)
+library(broom)
+library(effsize)
+library(png)
+library(grid)
+```
+
+```{r}
+tuesdata <- tidytuesdayR::tt_load(2022, week = 33)
+tv_series <- read_tsv("title.basics.tsv")
+
+characters <- tuesdata$characters
+psych_stats <- tuesdata$psych_stats
+```
+
+```{r}
+feminists <- psych_stats %>%
+  filter(question %in% c("feminist/sexist", "badass/weakass")) %>%
+  select(-c(uni_id, rank, rating_sd, number_ratings)) %>%
+  pivot_wider(values_from = c(avg_rating, personality), names_from = question) %>%
+  rename("feminist_rating" = "avg_rating_feminist/sexist", "feminist_sexist" = "personality_feminist/sexist",  "badass_rating" = "avg_rating_badass/weakass", "badass_weakass" = "personality_badass/weakass")
+
+for (i_row in c(1:nrow(feminists))) {
+  if (feminists$`feminist_sexist`[i_row] == "sexist") {
+    feminists$feminist_rating[i_row] = 100 - feminists$feminist_rating[i_row]
+  }
+  if (feminists$`badass_weakass`[i_row] == "weakass") {
+    feminists$badass_rating[i_row] = 100 - feminists$badass_rating[i_row]
+  }
+
+}
+
+```
+
+```{r}
+numbers <- feminists %>%
+  group_by(feminist_sexist) %>%
+  summarise(n = n())
+```
+
+
+
+```{r}
+stats <- t.test(subset(feminists, feminist_sexist=="feminist")$badass_rating, 
+       subset(feminists, feminist_sexist=="sexist")$badass_rating, var.equal = FALSE, paired=FALSE) %>% tidy()
+
+d <- cohen.d(subset(feminists, feminist_sexist=="feminist")$badass_rating, 
+       subset(feminists, feminist_sexist=="sexist")$badass_rating, var.equal = FALSE, paired=FALSE) 
+
+stats$d <- d$estimate
+stats$dCI_low <- d$conf.int[[1]]
+stats$dCI_high <- d$conf.int[[2]]
+
+stats
+```
+
+```{r}
+
+img <- rasterGrob(readPNG("Feminism_symbol.png"))
+
+tv_feminists_plot <- ggplot(feminists, aes(x=feminist_sexist, y=badass_rating)) +
+  #half_violins
+  geom_half_violin(aes(fill=feminist_sexist), alpha=0.2,  color="black", position=position_nudge(-0.2)) + 
+  scale_fill_scico_d(palette = 'hawaii', begin = 0.15, end = 0.73) +
+  annotation_custom(img, ymin=70, ymax=90, xmin=0.55, xmax = 0.7) +
+  #individual points jittered
+  geom_point(position = position_jitter(width =0.05, height = 0), shape=16, size = 2) +
+  #boxplot with median
+  geom_boxplot(width = .08, outlier.shape = NA, position=position_nudge(-0.125)) +
+  #mean
+  stat_summary(position=position_nudge(-0.2), fun = mean, geom = "point", size=1.5, shape = 16, colour = "black") + 
+  #significance
+  annotate("segment", x = 0.88, xend = 1.88, y = 107, yend = 107, size=0.35) +
+  annotate("text", label="***", x = 1.4, y = 108.5, size = 5) +
+  #axes
+  scale_y_continuous(breaks = c(20, 40, 60, 80, 100)) +
+  scale_x_discrete(expand = expansion(mult = c(0.65, 0)), labels = c("Feminist(N=616)", "Sexist(N=273)")) +
+  #all labels
+  labs(x = "TV characters classified as", y = "Badass rating (0-100)", 
+       title = "Feminists are much more badass", subtitle = "...at least on TV", 
+       caption = "Visualisation: @Anna_Mak_ \nSource: openpsychometrics.org by @tanya_shapiro") + 
+  #general aesthetics
+  theme_cowplot() +
+  theme(text = element_text(family = "Courier"),
+        plot.margin = margin(0.85, 0.75, 0.25, 0.75, "cm"),
+        plot.title = element_text(size=26, face="bold", color = "#D23077", hjust = 0.725, vjust = 3),
+        plot.subtitle = element_text(hjust = 1.025, vjust=5),
+        plot.caption = element_text(size=8, face = "italic", lineheight = 1.1, vjust=-5, hjust=1.05, color = "#D23077"),
+        plot.background = element_rect(fill="#FEECF0"),
+        axis.title.y = element_text(size = 12),
+        axis.title.x = element_text(vjust=7.5, hjust=0.6, size = 10),
+        axis.text.y = element_text(size = 10),
+        axis.text.x = element_text(hjust=0.75, vjust=-4.5, size = 12, face = "bold"),
+        axis.ticks.x = element_line(size=0),
+        legend.position = "none",
+        aspect.ratio = 0.65)  
+
+
+ggsave("w33_tvfeminists_makova.png", plot = tv_feminists_plot, units = "cm",  width = 18, height = 15, dpi = "retina", device = "png")
+```
+
+
+
+
